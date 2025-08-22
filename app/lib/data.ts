@@ -11,17 +11,26 @@ import { formatCurrency } from './utils';
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
+const delayRequest = <T>(name: string, ms: number, promise: Promise<T>): Promise<T> => {
+  console.log(`Delaying request "${name}" by ${ms}ms`);
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      promise.then((data) => {
+        console.log(`Request "${name}" completed`);
+        resolve(data);
+      }).catch(reject);
+    }, ms);
+  });
+};
+
 export async function fetchRevenue() {
   try {
     // Artificially delay a response for demo purposes.
     // Don't do this in production :)
 
-    // console.log('Fetching revenue data...');
-    // await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    const data = await sql<Revenue[]>`SELECT * FROM revenue`;
-
-    // console.log('Data fetch completed after 3 seconds.');
+    // const data = await sql<Revenue[]>`SELECT * FROM revenue`;
+    const data = await delayRequest<Revenue[]>('fetchRevenue', 3000, sql<Revenue[]>`SELECT * FROM revenue`);
 
     return data;
   } catch (error) {
@@ -32,17 +41,30 @@ export async function fetchRevenue() {
 
 export async function fetchLatestInvoices() {
   try {
-    const data = await sql<LatestInvoiceRaw[]>`
+    console.log('Fetching latest invoices...');
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // const data = await sql<LatestInvoiceRaw[]>`
+    //   SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
+    //   FROM invoices
+    //   JOIN customers ON invoices.customer_id = customers.id
+    //   ORDER BY invoices.date DESC
+    //   LIMIT 5`;
+    const data = await delayRequest<LatestInvoiceRaw[]>('fetchLatestInvoices', 2000, sql<LatestInvoiceRaw[]>`
       SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
       FROM invoices
       JOIN customers ON invoices.customer_id = customers.id
       ORDER BY invoices.date DESC
-      LIMIT 5`;
+      LIMIT 5
+    `);
 
     const latestInvoices = data.map((invoice) => ({
       ...invoice,
       amount: formatCurrency(invoice.amount),
     }));
+
+    console.log('Latest invoices fetched after 2 seconds.');
+
     return latestInvoices;
   } catch (error) {
     console.error('Database Error:', error);
@@ -62,11 +84,16 @@ export async function fetchCardData() {
          SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) AS "pending"
          FROM invoices`;
 
-    const data = await Promise.all([
+    // const data = await Promise.all([
+    //   invoiceCountPromise,
+    //   customerCountPromise,
+    //   invoiceStatusPromise,
+    // ]);
+    const data = await delayRequest('fetchDataCard', 1200, Promise.all([
       invoiceCountPromise,
       customerCountPromise,
       invoiceStatusPromise,
-    ]);
+    ]));
 
     const numberOfInvoices = Number(data[0][0].count ?? '0');
     const numberOfCustomers = Number(data[1][0].count ?? '0');
